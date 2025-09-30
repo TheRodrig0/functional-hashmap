@@ -1,164 +1,195 @@
-/** 
- * @fileoverview Cria uma classe Hashmap e implementa com um teste simples.
+/** * @fileoverview Implementação de uma estrutura de dados Hashmap em JavaScript.
  * @author TheRodrig0
  * @version 1.0.0
 */
 
-/** Classe de estrutura de dados Hashmap.
- * @class Hashmap.
- * @description Essa classe é uma maneira eficiente de armazenamento, tentando sempre ser <strong>O(1)</strong>.
- * @returns Estrutura de dados Hashmap.
- * @example 
- * const HASHMAP = new Hashmap(1000) // Criação do hashmap.
- * HASHMAP.put("Rodrigo", { isAdmin: true }) // Inserção da chave/valor.
- * console.log(HASHMAP.get("Rodrigo")) // Exibição do valor da chave inserida.
- * console.log(HASHMAP.getSize()) // Retorna o tamanho do hashmap.
- * console.table(HASHMAP.getBuckets()) // Retorna o "buckets" do hashmap.
- * HASHMAP.delete("Rodrigo") // Exclusão da chave/valor do hashmap.
+/**
+ * Representa uma estrutura de dados Hashmap (ou Tabela de Dispersão).
+ * @description Esta classe oferece um armazenamento de chave-valor com complexidade
+ * de tempo amortizada de O(1) para inserção, busca e remoção.
+ * A capacidade interna é redimensionada dinamicamente para otimizar o uso de memória e a performance.
+ * @example
+ * const HASHMAP = new Hashmap(); // Criação do hashmap.
+ * HASHMAP.put("Rodrigo", { isAdmin: true }); // Inserção de um par chave-valor.
+ * console.log(HASHMAP.get("Rodrigo")); // Exibe o valor da chave inserida.
+ * console.log(HASHMAP.size); // Retorna o número de elementos no hashmap.
+ * console.table(HASHMAP.buckets); // Retorna uma cópia dos "buckets" do hashmap.
+ * HASHMAP.delete("Rodrigo"); // Exclusão do par chave-valor.
 */
+export class Hashmap {
+    static #BASE_HASH = 2166136261;
+    static #DEFAULT_PRIME_NUMBER = 16777619;
+    static #MINIMUM_SIZE = 3;
+    static #MAXIMUM_LIMIT_OF_LOAD_FACTOR = 0.8;
+    static #MINIMUM_LIMIT_OF_LOAD_FACTOR = 0.2;
+    static #RESIZE_FACTOR = 2;
 
-class Hashmap {
-
-    #size
-    #buckets
+    #size = Hashmap.#MINIMUM_SIZE;
+    #elementCount = 0;
+    #buckets = Array.from({ length: this.#size }, () => []);
 
     /**
-     * @constructor
-     * @param {number} size Tamanho do array principal do hashmap.
-     * @param {Array<Array<any>>} buckets Array que armazena os arrays secundários juntamente com seu conteúdo.
-     * @throws Error Invalid argument: size is not a number or size is less than zero.
-    */
-
-    constructor(size = 5) {
-        if (typeof size != 'number' || size <= 0)
-            throw new Error("Invalid input: 'size' is not a number or size is less than zero.")
-
-        this.#size = size
-        this.#buckets = Array.from({ length: this.#size }, () => [])
-    }
-
-    /** Método #hash
-     * @method #hash
-     * @description Tira o hash de uma string e retorna um módulo para a localização dos dados dos buckets.
-     * @param {string} string String que será tirado o hash.
-     * @returns {number} módulo "%" do hash (sempre positivo).
-     * @throws Error Invalid argument: string must be a non-empty string.
-    */
-
+     * @private
+     * Calcula o hash de uma string e retorna um índice para o array de buckets.
+     * @param {string} string A string que será processada.
+     * @returns {number} O índice do bucket correspondente (sempre positivo).
+     */
     #hash(string) {
-        if (typeof string != "string" || string == "")
-            throw new Error("Invalid input: 'string' must be a non-empty string.")
+        this.#validateKey(string);
 
-        const HASH = [...string].reduce(
-            (hash, character) => (Math.imul(31, hash) + character.charCodeAt(0)) | 0,
-            0
-        ) % this.#size
+        let hash = Hashmap.#BASE_HASH;
 
-        return HASH < 0 ? HASH * -1 : HASH
+        for (let i = 0;i < string.length;i++) {
+            hash ^= string.charCodeAt(i);
+            hash = Math.imul(hash, Hashmap.#DEFAULT_PRIME_NUMBER);
+        }
+
+        return Math.abs(hash % this.#size);
     }
 
-    /** Método put
-     * @method put
-     * @description Insere a chave/valor em um bucket, mas se ele já estiver ocupado ele sobrescreverá o valor existente.
-     * @param {string} key Chave que será usado como endereço.
-     * @param {any} value Valor que será guardado.
-     * @throws Error Invalid argument: key must be a non-empty string, and value cannot be null or undefined.
-    */
+    /**
+     * @private
+     * Redimensiona a capacidade de armazenamento do hashmap (o número de buckets)
+     * quando o fator de carga atinge limites pré-definidos.
+     */
+    #resize() {
+        const loadFactor = this.#elementCount / this.#size;
+        let newSize = this.#size;
 
+        if (loadFactor > Hashmap.#MAXIMUM_LIMIT_OF_LOAD_FACTOR) {
+            newSize = this.#size * Hashmap.#RESIZE_FACTOR;
+        }
+
+        if (loadFactor < Hashmap.#MINIMUM_LIMIT_OF_LOAD_FACTOR) {
+            newSize = Math.max(
+                Hashmap.#MINIMUM_SIZE,
+                Math.floor(this.#size / Hashmap.#RESIZE_FACTOR)
+            );
+        }
+
+        if (newSize === this.#size) {
+            return;
+        }
+
+        this.#size = newSize;
+        const oldBuckets = this.#buckets;
+        this.#buckets = Array.from({ length: this.#size }, () => []);
+
+        for (const [key, value] of oldBuckets.flat()) {
+            const bucketIndex = this.#hash(key);
+            this.#buckets[bucketIndex].push([key, value]);
+        }
+    }
+
+    /**
+     * @private
+     * Valida se a chave fornecida é uma string não vazia.
+     * @param {any} key A chave a ser validada.
+     * @throws {Error} Lança um erro se a chave não for uma string não vazia.
+     */
+    #validateKey(key) {
+        if (typeof key === "string" && key.length > 0) {
+            return;
+        }
+
+        throw new Error("Invalid input: 'key' must be a non-empty string.");
+    }
+
+    /**
+     * @private
+     * Encontra a localização de uma entrada (par chave-valor) no hashmap.
+     * @param {string} key A chave da entrada a ser encontrada.
+     * @returns {{bucket: Array, entryIndex: number}} Um objeto contendo o bucket e o índice da entrada dentro dele (-1 se não for encontrado).
+     */
+    #findEntry(key) {
+        const bucketIndex = this.#hash(key);
+        const bucket = this.#buckets[bucketIndex];
+
+        const entryIndex = bucket.findIndex(([entryKey]) => entryKey === key);
+
+        return { bucket, entryIndex };
+    }
+
+    /**
+     * Insere ou atualiza um par chave-valor no hashmap.
+     * Se a chave já existir, o valor é sobrescrito.
+     * @param {string} key A chave para associar o valor.
+     * @param {any} value O valor a ser armazenado.
+     */
     put(key, value) {
-        if ((typeof key != "string" || key == "") || (value == null || value == undefined))
-            throw new Error("Invalid input: 'key' must be a non-empty string, and 'value' cannot be null or undefined.")
+        const { bucket, entryIndex } = this.#findEntry(key);
 
-        const INDEX_OF_BUCKET = this.#hash(key)
-        const BUCKET = this.#buckets[INDEX_OF_BUCKET]
-
-        for (let index = 0; index < BUCKET.length; index++) {
-            const [KEY] = BUCKET[index]
-
-            if (KEY != key) continue
-
-            BUCKET[index] = [key, value]
-            return
+        if (entryIndex !== -1) {
+            bucket[entryIndex][1] = value;
+            return;
         }
 
-        BUCKET.push([key, value])
+        bucket.push([key, value]);
+        this.#elementCount++;
+        this.#resize();
     }
 
-    /** Método get
-     * @method get
-     * @description Retorna o valor a partir da key inserida.
-     * @param {string} key Chave que será usada para retornar o valor da mesma.
-     * @throws Error Invalid input: key must be a non-empty string.
-    */
-
+    /**
+     * Retorna o valor associado à chave especificada.
+     * @param {string} key A chave cujo valor deve ser retornado.
+     * @returns {any | undefined} O valor associado à chave, ou undefined se a chave não for encontrada.
+     */
     get(key) {
-        if (typeof key != "string" || key == "")
-            throw new Error("Invalid input: 'key' must be a non-empty string.")
+        const { bucket, entryIndex } = this.#findEntry(key);
 
-        const INDEX_OF_BUCKET = this.#hash(key)
-        const BUCKET = this.#buckets[INDEX_OF_BUCKET]
-
-        for (let index = 0; index < BUCKET.length; index++) {
-            const [KEY, VALUE] = BUCKET[index]
-
-            if (KEY != key) continue
-            return VALUE
+        if (entryIndex === -1) {
+            return undefined;
         }
 
-        return undefined
+        return bucket[entryIndex][1];
     }
 
-    /** Método delete
-     * @method delete
-     * @description Deleta a chave/valor a partir da key inserida.
-     * @param {string} key Chave que será usada para achar o bucket para ser deletado.
-     * @throws Error Invalid input: key must be a non-empty string.
-    */
-
+    /**
+     * Remove o par chave-valor associado à chave especificada.
+     * @param {string} key A chave a ser removida.
+     * @returns {boolean} Retorna `true` se o elemento foi removido com sucesso, `false` caso contrário.
+     */
     delete(key) {
-        if (typeof key != "string" || key == "")
-            throw new Error("Invalid input: 'key' must be a non-empty string")
+        const { bucket, entryIndex } = this.#findEntry(key);
 
-        const INDEX_OF_BUCKET = this.#hash(key)
-        const BUCKET = this.#buckets[INDEX_OF_BUCKET]
-
-        for (let index = 0; index < BUCKET.length; index++) {
-            const [KEY] = BUCKET[index]
-
-            if (KEY != key) continue
-
-            BUCKET.splice(index, 1)
-            return true
-
+        if (entryIndex === -1) {
+            return false;
         }
 
-        return false
-
+        bucket.splice(entryIndex, 1);
+        this.#elementCount--;
+        this.#resize();
+        return true;
     }
 
-    /** Método getSize
-     * @method getSize
-     * @description Retorna o tamanho do hashmap.
-     * @returns {number} 
-    */
-
-    getSize() {
-        return this.#size
+    /**
+     * Verifica se uma chave existe no hashmap.
+     * @param {string} key A chave a ser verificada.
+     * @returns {boolean} Retorna `true` se a chave existe, `false` caso contrário.
+     */
+    has(key) {
+        return this.#findEntry(key).entryIndex !== -1;
     }
 
-    /** Método getBuckets
-     * @method getBuckets
-     * @description Retorna o array principal do hashmap.
-     * @returns {Array<Array<any>>} 
-    */
+    /**
+     * Retorna uma cópia profunda do array de buckets.
+     * @returns {Array<Array<[string, any]>>} Uma cópia segura do estado interno dos buckets.
+     */
+    get buckets() {
+        return structuredClone(this.#buckets);
+    }
 
-    getBuckets() {
-        return this.#buckets.map(bucket => [...bucket])
+    /**
+     * Retorna o número de pares chave-valor no hashmap.
+     * @returns {number} O número total de elementos.
+     */
+    get size() {
+        return this.#elementCount;
     }
 }
 
 // Criação da instancia HASHMAP.
-const HASHMAP = new Hashmap(10)
+const HASHMAP = new Hashmap()
 
 // Variável que será usada para o loop for.
 const NAME = "Rodrigo"
@@ -172,4 +203,4 @@ for (const i in NAME) {
 HASHMAP.delete("Rodrigo")
 
 // Exibe os buckets do hashmap.
-console.table(HASHMAP.getBuckets())
+console.table(HASHMAP.buckets)
